@@ -5,7 +5,7 @@ from text_utils import clean_text
 st.title("Intelligent Customer Support System")
 st.write("Ticket likho, model category batayega.")
 
-model = joblib.load("models/model.pkl")
+model = joblib.load("model.pkl")
 ticket = st.text_area("Ticket text", "I was charged twice for my invoice")
 
 if st.button("Classify"):
