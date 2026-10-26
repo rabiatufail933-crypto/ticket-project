@@ -1,3 +1,4 @@
+
 import json
 import random
 import re
@@ -103,33 +104,56 @@ def analyze_rules(text):
             "language": detect_language(text), "engine": "Rule-based NLP"}
 
 
-def ai_available():
+def get_provider():
+    """Returns 'gemini' (free key), 'claude', or None depending on which secret is set."""
     try:
-        return "ANTHROPIC_API_KEY" in st.secrets
+        if "GEMINI_API_KEY" in st.secrets:
+            return "gemini"
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            return "claude"
     except Exception:
-        return False
+        pass
+    return None
+
+
+def ai_available():
+    return get_provider() is not None
 
 
 def analyze_ai(text):
-    """AI-as-a-service: calls the Claude API. Needs ANTHROPIC_API_KEY in Streamlit secrets."""
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+    """AI-as-a-service: calls an external AI API (Gemini free tier or Claude)."""
+    provider = get_provider()
     prompt = (
         "Classify this customer support ticket. Reply with JSON only, no other text, with keys: "
         f'"category" (one of {list(CATEGORIES)}), "sentiment" (Positive/Neutral/Negative), '
         '"priority" (High/Medium/Low), "language" (English/Roman Urdu/Urdu).\n\n'
         f"Ticket: {text}"
     )
-    msg = client.messages.create(
-        model="claude-sonnet-5-5",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    data = json.loads(re.search(r"\{.*\}", msg.content[0].text, re.S).group())
-    if data["category"] not in CATEGORIES:
+
+    if provider == "gemini":
+        from google import genai
+
+        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+        model = st.secrets.get("GEMINI_MODEL", "gemini-flash-latest")
+        resp = client.models.generate_content(model=model, contents=prompt)
+        raw = resp.text
+        engine = "Gemini AI (API)"
+    else:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+        msg = client.messages.create(
+            model="claude-sonnet-5-5",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text
+        engine = "Claude AI (API)"
+
+    data = json.loads(re.search(r"\{.*\}", raw, re.S).group())
+    if data.get("category") not in CATEGORIES:
         data["category"] = DEFAULT_CATEGORY
-    data["engine"] = "Claude AI (API)"
+    data["engine"] = engine
     return data
 
 
@@ -189,9 +213,11 @@ for team in sorted({cfg["route"] for cfg in CATEGORIES.values()}):
     st.sidebar.text(f"🟢 {team}: Active ({n})")
 
 st.sidebar.subheader("⚙️ Analysis Engine")
-use_ai = st.sidebar.toggle("Use Claude AI (API)", value=False, disabled=not ai_available())
+use_ai = st.sidebar.toggle("Use AI (API)", value=False, disabled=not ai_available())
 if not ai_available():
-    st.sidebar.caption("AI mode off: add ANTHROPIC_API_KEY in Streamlit secrets to enable.")
+    st.sidebar.caption("AI mode off: add GEMINI_API_KEY (free) in Streamlit secrets to enable.")
+else:
+    st.sidebar.caption(f"AI provider ready: {get_provider().title()}")
 
 # ---------------------------------------------------------------
 # MAIN
