@@ -1,4 +1,3 @@
-
 import json
 import random
 import re
@@ -131,12 +130,18 @@ def analyze_ai(text):
     )
 
     if provider == "gemini":
-        from google import genai
+        import requests
 
-        client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
         model = st.secrets.get("GEMINI_MODEL", "gemini-flash-latest")
-        resp = client.models.generate_content(model=model, contents=prompt)
-        raw = resp.text
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        resp = requests.post(
+            url,
+            headers={"x-goog-api-key": st.secrets["GEMINI_API_KEY"], "Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         engine = "Gemini AI (API)"
     else:
         import anthropic
