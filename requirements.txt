@@ -1,5 +1,3 @@
-pandas
-scikit-learn
-matplotlib
-joblib
 streamlit
+pandas
+anthropic
