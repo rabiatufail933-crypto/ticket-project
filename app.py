@@ -84,4 +84,4 @@ if st.button("Analyze & Route Ticket", type="primary"):
             st.write(f"➡️ {route}")
             
     else:
-        st.warning("Please enter a ticket text first
+        st.warning("Please enter a ticket text first.")
