@@ -130,18 +130,38 @@ def analyze_ai(text):
     )
 
     if provider == "gemini":
+        import time
+
         import requests
 
-        model = st.secrets.get("GEMINI_MODEL", "gemini-flash-latest")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        resp = requests.post(
-            url,
-            headers={"x-goog-api-key": st.secrets["GEMINI_API_KEY"], "Content-Type": "application/json"},
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        models = [st.secrets.get("GEMINI_MODEL", "gemini-flash-latest"),
+                  "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+        raw, last_err = None, None
+        for model in dict.fromkeys(models):  # unique, keeps order
+            for attempt in range(2):
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                    resp = requests.post(
+                        url,
+                        headers={"x-goog-api-key": st.secrets["GEMINI_API_KEY"],
+                                 "Content-Type": "application/json"},
+                        json={"contents": [{"parts": [{"text": prompt}]}]},
+                        timeout=30,
+                    )
+                    if resp.status_code in (429, 500, 503):  # busy: wait and retry
+                        last_err = f"{resp.status_code} on {model}"
+                        time.sleep(1.5)
+                        continue
+                    resp.raise_for_status()
+                    raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    break
+                except Exception as e:
+                    last_err = str(e)
+                    break
+            if raw:
+                break
+        if not raw:
+            raise RuntimeError(f"Gemini unavailable ({last_err})")
         engine = "Gemini AI (API)"
     else:
         import anthropic
